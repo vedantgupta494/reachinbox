@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmailStatus {
+  PENDING
+  SCHEDULED
+  SENT
+  FAILED
+  RATE_LIMITED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  googleId  String   @unique
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  slackConnection SlackConnection?
+  emails          Email[]
+}
+
+// Each "sender" mimics a from-address / tenant that has its own hourly quota
+model Sender {
+  id                    String   @id @default(uuid())
+  name                  String
+  emailAddress          String   @unique
+  maxEmailsPerHour      Int      @default(200)
+  minDelayBetweenSendMs Int      @default(2000)
+  createdAt             DateTime @default(now())
+
+  emails Email[]
+}
+
+model Email {
+  id            String      @id @default(uuid())
+  jobId         String?     @unique // BullMQ job id, used for idempotency lookups
+  subject       String
+  body          String      @db.Text
+  recipient     String
+  senderId      String
+  sender        Sender      @relation(fields: [senderId], references: [id])
+  userId        String?
+  user          User?       @relation(fields: [userId], references: [id])
+  scheduledAt   DateTime
+  status        EmailStatus @default(PENDING)
+  sentAt        DateTime?
+  failReason    String?
+  attempts      Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([status])
+  @@index([senderId, scheduledAt])
+}
+
+model SlackConnection {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  accessToken String
+  teamName    String?
+  channelId   String?
+  webhookUrl  String?
+  connectedAt DateTime @default(now())
+}
+
+// Redis is the source of truth for live counters; this table is an
+// audit/fallback log of rate-limit hits (used to drive the Slack notice).
+model RateLimitEvent {
+  id        String   @id @default(uuid())
+  senderId  String
+  hourKey   String // e.g. "2026-08-30T16"
+  count     Int
+  createdAt DateTime @default(now())
+
+  @@index([senderId, hourKey])
+}
