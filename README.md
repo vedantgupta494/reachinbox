@@ -22,7 +22,6 @@ This is under active development. Current progress:
 - [x] Frontend dashboard (Next.js + Tailwind) — compose modal, CSV lead upload, scheduled/sent tables with loading & empty states
 - [ ] Google OAuth login (frontend + backend)
 - [ ] Slack OAuth connect flow (backend has the notifier, needs the OAuth handshake)
-- [ ] Demo video
 
 ## Architecture
 
